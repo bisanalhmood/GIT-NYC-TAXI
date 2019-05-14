@@ -1,0 +1,187 @@
+---
+title: "R- Markdown /NYC Taxi trip Analysis"
+output: html_document
+---
+
+#LOADING DATA
+```{r}
+Mar17_data = read.csv('yellow_tripdata_2017-03.csv')
+```
+
+```{r}
+Jun17_data = read.csv('yellow_tripdata_2017-06.csv')
+```
+
+```{r}
+Nov17_data = read.csv('yellow_tripdata_2017-11.csv')
+```
+
+#MARCH DATA EXPLORATION
+```{r}
+head(Mar17_data)
+```
+
+```{r}
+tail(Mar17_data)
+```
+
+```{r}
+mean(Mar17_data$tip_amount)
+```
+
+```{r}
+median(Mar17_data$tip_amount)
+```
+
+```{r}
+mean(Mar17_data$trip_distance)
+```
+
+```{r}
+median(Mar17_data$trip_distance)
+```
+
+```{r}
+calculate_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+calculate_mode(Mar17_data$tip_amount)
+```
+```{r}
+calculate_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+calculate_mode(Mar17_data$trip_distance)
+```
+```{r}
+colnames(Mar17_data)
+```
+
+#Any missing values?
+
+```{r}
+sum(is.na(Mar17_data))
+```
+```{r}
+sum(is.na(Jun17_data))
+```
+```{r}
+sum(is.na(Nov17_data))
+```
+
+
+```{r}
+range(Mar17_data$tip_amount)
+```
+```{r}
+boxplot(Mar17_data$total_amount)
+```
+
+```{r}
+boxplot(Mar17_data$tip_amount)
+```
+
+
+Negative tip amount does not make any sense. we can just either take them out of our analysis or impute them. I choose to take them out as they seem to be incorrectly inputed data.  <---- OUTLIERS
+
+```{r}
+Mar17_data= Mar17_data[!Mar17_data$total_amount < 0,]
+```
+
+
+```{r}
+range(Mar17_data$tip_amount)
+```
+
+```{r}
+Mar17_data= Mar17_data[!Mar17_data$tip_amount < 0,]
+```
+
+```{r}
+range(Mar17_data$tip_amount)
+```
+
+```{r}
+range(Mar17_data$total_amount)
+```
+
+Huge range for a taxi fare, Let's examine all outliers not just negative ones.
+
+```{r}
+outliers <- boxplot(Mar17_data$total_amount, plot=FALSE)$out
+```
+
+```{r}
+boxplot(Mar17_data$total_amount, plot=FALSE)$out
+```
+
+We can see there is 944,805 observations that are considered outliers. Again we can either impute them with a value such as average or remove them. 
+```{r}
+NROW(outliers)/nrow(Mar17_data)
+```
+
+About 9% of the data are outliers, it is risky to exclude them from our analysis and many of them are resonable fare for longer distance or other circumstances, etc.
+
+
+```{r}
+boxplot(Mar17_data$total_amount)
+```
+
+```{r}
+x <- Mar17_data$total_amount
+qnt <- quantile(x, probs=c(.25, .75), na.rm = T)
+caps <- quantile(x, probs=c(.05, .95), na.rm = T)
+H <- 1.5 * IQR(x, na.rm = T)
+x[x < (qnt[1] - H)] <- caps[1]
+x[x > (qnt[2] + H)] <- caps[2]
+```
+
+
+```{r}
+boxplot(x)
+```
+
+
+
+
+
+```{r}
+Mar17_data$total_amount <- x
+```
+
+
+```{r}
+boxplot(Mar17_data$tip_amount)
+```
+
+```{r}
+z <- Mar17_data$tip_amount
+qnt <- quantile(z, probs=c(.25, .75), na.rm = T)
+caps <- quantile(z, probs=c(.05, .95), na.rm = T)
+H1 <- 1.5 * IQR(x, na.rm = T)
+z[z < (qnt[1] - H1)] <- caps[1]
+z[z > (qnt[2] + H1)] <- caps[2]
+```
+
+```{r}
+Mar17_data$tip_amount <- z
+```
+
+```{r}
+boxplot(z)
+```
+
+
+```{r}
+
+library(caTools)
+set.seed(100)
+split = sample.split(Mar17_data$tip_amount,SplitRatio = 0.7)
+train = Mar17_data[split,]
+test = Mar17_data[!split,]
+model1 = glm(tip_amount~.,data=train,family='binomial')
+summary(model1)
+```
+
