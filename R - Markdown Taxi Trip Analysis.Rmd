@@ -1,20 +1,15 @@
 ---
 title: "R- Markdown /NYC Taxi trip Analysis"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 #LOADING DATA
 ```{r}
-Mar17_data = read.csv('yellow_tripdata_2017-03.csv')
+Mar17_data = read.csv('yellow_tripdata_2017-03.csv',stringsAsFactors = F)
 ```
 
-```{r}
-Jun17_data = read.csv('yellow_tripdata_2017-06.csv')
-```
-
-```{r}
-Nov17_data = read.csv('yellow_tripdata_2017-11.csv')
-```
 
 #MARCH DATA EXPLORATION
 ```{r}
@@ -59,88 +54,219 @@ calculate_mode(Mar17_data$trip_distance)
 colnames(Mar17_data)
 ```
 
+```{r}
+str(Mar17_data)
+```
+```{r}
+summary(Mar17_data)
+```
+
+
+
 #Any missing values?
 
 ```{r}
 sum(is.na(Mar17_data))
 ```
-```{r}
-sum(is.na(Jun17_data))
-```
-```{r}
-sum(is.na(Nov17_data))
-```
 
 
 ```{r}
 range(Mar17_data$tip_amount)
 ```
+
+
+```{r}
+LocationID_lookup<-read.csv("taxi+_zone_lookup.csv")
+LocationID_lookup
+```
+
+#transform pickup/dropoff_datetime into a datetime format
+```{r}
+tpep_pickup_datetimeformat<-as.POSIXct(Mar17_data$tpep_pickup_datetime,tz=Sys.timezone())
+tpep_dropoff_datetimeformat<-as.POSIXct(Mar17_data$tpep_dropoff_datetime,tz=Sys.timezone())
+```
+```{r}
+Mar17_data["tpep_pickup_datetimeformat"] <- NA
+```
+```{r}
+Mar17_data$tpep_pickup_datetimeformat <- tpep_pickup_datetimeformat
+```
+
+```{r}
+Mar17_data["tpep_dropoff_datetimeformat"] <- NA
+Mar17_data$tpep_dropoff_datetimeformat <- tpep_dropoff_datetimeformat
+```
+```{r}
+str(Mar17_data)
+```
+
+#adding speed variable(mile per hour) and duration in mins
+
+```{r}
+#install.packages('lubridate')
+#library(lubridate)
+start <- ymd_hms(Mar17_data$tpep_pickup_datetime, tz = "US/Eastern")
+end <- ymd_hms(Mar17_data$tpep_dropoff_datetime, tz = "US/Eastern")
+time.interval <- start %--% end
+time.interval[1:5]
+str(time.interval)
+time.duration <- as.duration(time.interval)
+time.duration[1:5]
+```
+```{r}
+Mar17_data["trip_duration_min"] <- NA
+Mar17_data$trip_duration_min<- as.numeric(time.duration, units= "min") 
+Mar17_data$trip_duration_min[1:5]
+```
+
+```{r}
+time.duration <- as.numeric(time.duration,units="hours")
+time.duration[1:5]
+```
+
+
+```{r}
+Mar17_data["average_trip_speed"] <- NA
+Mar17_data$average_trip_speed<- Mar17_data$trip_distance/time.duration
+Mar17_data$average_trip_speed[1:5]
+```
+
+#Adding time of the day variable by extracting hours only then add definiton grouping for hours
+
+
+```{r}
+hour_dropped_off <- substr(Mar17_data$tpep_dropoff_datetime, 12,16)
+hour_dropped_off[1:5]
+```
+```{r}
+class(hour_dropped_off) = "hour"
+```
+
+```{r}
+memory.size()
+```
+
+```{r}
+memory.limit()
+```
+
+
+
+
+```{r}
+Mar17_data["timeofday"] <- NA
+hour_dropped_off <- as.POSIXct(strptime(c(hour_dropped_off),"%H:%M"),"EST")
+x=as.POSIXct(strptime(c("07:00","08:59","9:00","11:59","12:00","15:59","16:00","18:59","19:00","23:59","00:00","06:59"),"%H:%M"),"EST")
+library(tidyverse)
+Mar17_data$timeofday<- case_when(
+between(hour_dropped_off,x[1],x[2]) ~"rush_hour",
+between(hour_dropped_off,x[3],x[4]) ~"late_morning",
+between(hour_dropped_off,x[5],x[6]) ~"afternoon",
+between(hour_dropped_off,x[7],x[8]) ~"rush_hour",
+between(hour_dropped_off,x[9],x[10]) ~"night",
+between(hour_dropped_off,x[11],x[12])~"post_midnight",
+TRUE~"N/A")
+```
+
+
+
+```{r}
+unique(Mar17_data$store_and_fwd_flag)
+Mar17_data$store_and_fwd_flag<-as.numeric(factor(Mar17_data$store_and_fwd_flag))
+str(Mar17_data)
+```
+
+
+
+
+
+#Adding Isweekend variable
+```{r}
+df = data.frame(Mar17_data$tpep_pickup_datetimeformat) 
+df$day <- weekdays(as.Date(df$Mar17_data))
+df
+```
+
+
+```{r}
+Mar17_data["IsWeekend"] <- NA
+Mar17_data$IsWeekend <- ifelse(weekdays(Mar17_data$tpep_pickup_datetimeformat) %in% c("Saturday", "Sunday"), "YES", "NO")
+```
+
+```{r}
+unique(Mar17_data$IsWeekend)
+Mar17_data$IsWeekend<-as.numeric(factor(Mar17_data$IsWeekend))
+str(Mar17_data)
+```
+
+#Exploration using visualizations
+
+```{r}
+data <- subset(Mar17_data, select = c("VendorID","passenger_count","trip_distance","RatecodeID","store_and_fwd_flag","PULocationID","DOLocationID","payment_type","fare_amount","extra","mta_tax","tip_amount","tolls_amount","improvement_surcharge","total_amount","trip_duration_min","average_trip_speed","timeofday","IsWeekend"))
+  summary(data)
+```
+
+```{r}
+datax= Mar17_data
+datax= datax[!data$total_amount > 300,]
+```
+
+#Using a variation of the origional dataset to help see the histogram better, but will not commit these changes.
+```{r echo=T, warning=F,message=F}
+library(graphics)
+hist(datax$total_amount)
+```
+```{r}
+hist(datax$tip_amount)
+```
+
+
+
+#boxplot is quite unclear because of the one row of extremely high value of 171000+ total amount (will be trated later on)
 ```{r}
 boxplot(Mar17_data$total_amount)
 ```
-
+#This is how it looks using the supplimental data set that we created earlier just to see the graph better.
+#We can see outliers
+#We can see the negative values I mentioned in The accompanied report
 ```{r}
-boxplot(Mar17_data$tip_amount)
+boxplot(datax$total_amount)
 ```
 
-
-Negative tip amount does not make any sense. we can just either take them out of our analysis or impute them. I choose to take them out as they seem to be incorrectly inputed data.  <---- OUTLIERS
-
-```{r}
-Mar17_data= Mar17_data[!Mar17_data$total_amount < 0,]
+``` {r echo=T, warning=F,message=F}
+library(ggplot2)
+ggplot(data=Mar17_data,aes(x="",y=tip_amount))+
+  geom_boxplot()
 ```
 
-
+#IsWeekend?
+#1= Yes
+#2= NO
+#We can see there is an increase of the number of zero tips on weekends, this might be because people take more rides in on weekends.
+```{r echo=T, warning=F,message=F}
+ggplot(data=Mar17_data,aes(x=tip_amount,color=factor(IsWeekend)))+
+  geom_freqpoly(size=1.2)
+```
+#The Q-Q plot compares the theoretical quantiles to the actual quantiles of the residuals. Since most of the points fall on the straight line then the theoretical and realised are very similar, and the assumption is met. we can see significant dwviation from the line in quatile >4 which means it is overdispersed.
 ```{r}
-range(Mar17_data$tip_amount)
+qqnorm(Mar17_data$tip_amount)
+qqline(Mar17_data$tip_amount)
 ```
 
-```{r}
-Mar17_data= Mar17_data[!Mar17_data$tip_amount < 0,]
+#Not the best graph to show relation between average_trip_speed and tip amount but can still give us an idea of how our data looks like
+```{r echo=T, warning=F,message=F}
+ggplot(data=Mar17_data,aes(x=average_trip_speed,y=tip_amount))+
+  geom_point() 
 ```
 
-```{r}
-range(Mar17_data$tip_amount)
+#we can see night time and post midnight have the highest tipping amount
+```{r echo=T, warning=F,message=F}
+ggplot(data=Mar17_data,aes(x=factor(timeofday),fill=factor(timeofday),y=tip_amount))+
+  geom_bar(stat = 'summary',fun.y='mean',position='dodge')
 ```
-
-```{r}
-range(Mar17_data$total_amount)
-```
-
-Huge range for a taxi fare, Let's examine all outliers not just negative ones.
-
-```{r}
-outliers <- boxplot(Mar17_data$total_amount, plot=FALSE)$out
-```
-
-```{r}
-boxplot(Mar17_data$total_amount, plot=FALSE)$out
-```
-
-We can see there is 944,805 observations that are considered outliers. Again we can either impute them with a value such as average or remove them. 
-```{r}
-NROW(outliers)/nrow(Mar17_data)
-```
-
-About 9% of the data are outliers, it is risky to exclude them from our analysis and many of them are resonable fare for longer distance or other circumstances, etc.
-
-
-```{r}
-boxplot(Mar17_data$total_amount)
-```
-
-```{r}
-x <- Mar17_data$total_amount
-qnt <- quantile(x, probs=c(.25, .75), na.rm = T)
-caps <- quantile(x, probs=c(.05, .95), na.rm = T)
-H <- 1.5 * IQR(x, na.rm = T)
-x[x < (qnt[1] - H)] <- caps[1]
-x[x > (qnt[2] + H)] <- caps[2]
-```
-
-
-```{r}
-boxplot(x)
+```{r echo=T, warning=F,message=F}
+ggplot(data=Mar17_data,aes(x=trip_duration_min,y=tip_amount))+
+  geom_smooth() 
 ```
 
 
@@ -148,40 +274,176 @@ boxplot(x)
 
 
 ```{r}
-Mar17_data$total_amount <- x
-```
-
-
-```{r}
-boxplot(Mar17_data$tip_amount)
+unique(Mar17_data$timeofday)
+Mar17_data$timeofday<-as.numeric(factor(Mar17_data$timeofday))
+str(Mar17_data)
 ```
 
 ```{r}
-z <- Mar17_data$tip_amount
-qnt <- quantile(z, probs=c(.25, .75), na.rm = T)
-caps <- quantile(z, probs=c(.05, .95), na.rm = T)
-H1 <- 1.5 * IQR(x, na.rm = T)
-z[z < (qnt[1] - H1)] <- caps[1]
-z[z > (qnt[2] + H1)] <- caps[2]
-```
-
-```{r}
-Mar17_data$tip_amount <- z
-```
-
-```{r}
-boxplot(z)
+colnames(Mar17_data)
 ```
 
 
-```{r}
+### Split Data
 
-library(caTools)
+#Added these two chunks as data fixing for correlation calculation
+```{r}
+data$average_trip_speed[data$average_trip_speed == 0] <- 0
+```
+
+```{r}
+data$average_trip_speed[is.nan(data$average_trip_speed)] <- 0
+data$average_trip_speed[data$average_trip_speed == Inf] <- 0
+```
+
+```{r}
+unique(data$timeofday)
+data$timeofday<-as.numeric(factor(data$timeofday))
+str(data)
+```
+
+```{r}
+library(caret)
 set.seed(100)
-split = sample.split(Mar17_data$tip_amount,SplitRatio = 0.7)
-train = Mar17_data[split,]
-test = Mar17_data[!split,]
-model1 = glm(tip_amount~.,data=train,family='binomial')
+split = createDataPartition(y=data$tip_amount,p = 0.7,list = F,groups = 100)
+train = data[split,]
+test = data[-split,]
+```
+
+
+```{r}
+str(train)
+```
+
+
+```{r}
+cor(train[-19],use = "complete.obs")
+```
+
+```{r}
+round(cor(train[,-19],use = "complete.obs"), 2)*100
+```
+
+
+
+```{r}
+library(tidyr); library(dplyr); library(ggplot2)
+corMatrix = as.data.frame(cor(train[,-19],use = "complete.obs"))
+corMatrix$var1 = rownames(corMatrix)
+corMatrix %>%
+  gather(key=var2,value=r,1:18)%>%
+  ggplot(aes(x=var1,y=var2,fill=r))+
+  geom_tile()+
+  geom_text(aes(label=round(r,2)),size=3)+
+  scale_fill_gradient2(low = 'red',high='green',mid = 'white')
+```
+
+
+
+```{r} 
+install.packages('corrplot')
+library(corrplot)
+corrplot(cor(train[,-19],use = "complete.obs"),method = 'square',type = 'lower',diag = F)
+```
+
+#Testing all possible subsets
+#regsubsets compares different models with adjusted R2 or Mallow’s Cp or BIC
+#Process: Find the prediction error for each subset and use the subset with the lowest prediction error
+#Since we have 18 predictors, regsubsets() will generate 18 models to reflect the best combination for every set (e.g., 1 predictor, two predictors,.. )
+```{r}
+install.packages('leaps')
+library(leaps)
+```
+
+```{r}
+subsets = regsubsets(tip_amount~.,data=train, nvmax=18)
+summary(subsets)
+```
+
+```{r}
+names(summary(subsets))
+```
+
+```{r}
+subsets_measures = data.frame(model=1:length(summary(subsets)$cp),cp=summary(subsets)$cp,bic=summary(subsets)$bic, adjr2=summary(subsets)$adjr2)
+subsets_measures
+```
+
+
+```{r}
+library(ggplot2)
+library(tidyr)
+subsets_measures %>%
+  gather(key = type, value=value, 2:4)%>%
+  ggplot(aes(x=model,y=value))+
+  geom_line()+
+  geom_point()+
+  facet_grid(type~.,scales='free_y')
+```
+
+```{r}
+which.min(summary(subsets)$cp)
+```
+
+```{r}
+coef(subsets,which.min(summary(subsets)$cp))
+```
+
+#just a trial model, not using what feature selection resulted in.
+```{r}
+model1 <- lm(tip_amount~trip_distance+RatecodeID+payment_type+fare_amount+tolls_amount+total_amount,train)
 summary(model1)
 ```
+
+```{r}
+library(caret)
+pred = predict(model1)
+rmse= sqrt(mean((pred-train$tip_amount)^2));rmse
+```
+
+#using the insights drawn from feature selection
+#trying 6 variables
+```{r}
+model2 <- lm(tip_amount~fare_amount+extra+mta_tax+tolls_amount+improvement_surcharge+total_amount,train)
+summary(model2)
+```
+
+```{r}
+pred2 = predict(model2)
+rmse2= sqrt(mean((pred2-train$tip_amount)^2));rmse2
+```
+
+#Using 5 variables instead of six
+```{r}
+model3 = lm(tip_amount~fare_amount+extra+mta_tax+tolls_amount+total_amount,train)
+summary(model3)
+```
+
+```{r}
+pred3 = predict(model3)
+rmse3= sqrt(mean((pred3-train$tip_amount)^2));rmse3
+```
+
+
+
+#Needs high computational capabilities
+```{r} 
+install.packages('rpart')
+install.packages('rpart.plot')
+
+library(rpart); library(rpart.plot)
+```
+
+```{r}
+library(rpart)
+tree1 = rpart(tip_amount~fare_amount+extra+mta_tax+tolls_amount+total_amount,data=train,method="class")
+prp(tree1)
+```
+
+
+
+
+
+
+
 
